@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/getlantern/systray"
 	"github.com/go-vgo/robotgo"
@@ -37,9 +38,9 @@ func setIcon(iconName string, configFile string) {
 	default:
 		systray.SetIcon(icon.Data)
 	}
+
 	if configFile != "" {
-		var settings AppSettings
-		settings = AppSettings{iconName}
+		settings := AppSettings{iconName}
 		fh, _ := os.Create(configFile)
 		defer fh.Close()
 
@@ -48,14 +49,29 @@ func setIcon(iconName string, configFile string) {
 	}
 }
 
+func startTimedMover(duration time.Duration, mouseMover *mousemover.MouseMover, ammStart, ammStop *systray.MenuItem) {
+	go func() {
+		log.Infof("starting active")
+		mouseMover.Start()
+		ammStart.Disable()
+		ammStop.Enable()
+
+		time.Sleep(duration)
+
+		log.Infof("stopping active")
+		ammStart.Enable()
+		ammStop.Disable()
+		mouseMover.Quit()
+	}()
+}
+
 func onReady() {
 	go func() {
 		err := configdir.MakePath(configPath)
 		if err != nil {
 			panic(err)
 		}
-		var settings AppSettings
-		settings = AppSettings{"mouse"}
+		settings := AppSettings{"mouse"}
 
 		if _, err = os.Stat(configFile); os.IsNotExist(err) {
 			fh, err := os.Create(configFile)
@@ -83,6 +99,12 @@ func onReady() {
 		ammStart := systray.AddMenuItem("Start", "start the app")
 		ammStop := systray.AddMenuItem("Stop", "stop the app")
 
+		timerMenu := systray.AddMenuItem("Timer", "Set timers for the app")
+		timer1 := timerMenu.AddSubMenuItem("30 minutes", "Start Timer 1")
+		timer2 := timerMenu.AddSubMenuItem("1 hour", "Start Timer 2")
+		timer3 := timerMenu.AddSubMenuItem("2 hours", "Start Timer 3")
+		timer4 := timerMenu.AddSubMenuItem("3 hours", "Start Timer 3")
+
 		icons := systray.AddMenuItem("Icons", "icon of the app")
 		mouse := icons.AddSubMenuItem("Mouse", "Mouse icon")
 		mouse.SetIcon(icon.Data)
@@ -97,11 +119,13 @@ func onReady() {
 		systray.AddSeparator()
 		mQuit := systray.AddMenuItem("Quit", "Quit the whole app")
 		// Sets the icon of a menu item. Only available on Mac.
-		//mQuit.SetIcon(icon.Data)
+		// mQuit.SetIcon(icon.Data)
+
 		mouseMover := mousemover.GetInstance()
 		mouseMover.Start()
 		ammStart.Disable()
 		ammStop.Enable()
+
 		for {
 			select {
 			case <-ammStart.ClickedCh:
@@ -109,7 +133,6 @@ func onReady() {
 				mouseMover.Start()
 				ammStart.Disable()
 				ammStop.Enable()
-				//notify.SendMessage("starting the app")
 
 			case <-ammStop.ClickedCh:
 				log.Infof("stopping the app")
@@ -122,6 +145,20 @@ func onReady() {
 				mouseMover.Quit()
 				systray.Quit()
 				return
+
+			case <-timer1.ClickedCh:
+				startTimedMover(30*time.Minute, mouseMover, ammStart, ammStop)
+				// startTimedMover(10*time.Second, mouseMover, ammStart, ammStop) // debug testing
+
+			case <-timer2.ClickedCh:
+				startTimedMover(1*time.Hour, mouseMover, ammStart, ammStop)
+
+			case <-timer3.ClickedCh:
+				startTimedMover(2*time.Hour, mouseMover, ammStart, ammStop)
+
+			case <-timer4.ClickedCh:
+				startTimedMover(3*time.Hour, mouseMover, ammStart, ammStop)
+
 			case <-mouse.ClickedCh:
 				setIcon("mouse", configFile)
 			case <-cloud.ClickedCh:
@@ -132,10 +169,9 @@ func onReady() {
 				setIcon("geometric", configFile)
 			case <-about.ClickedCh:
 				log.Infof("Requesting about")
-				robotgo.Alert("Automatic-mouse-mover app v1.3.0", "Developed by Prashant Gupta. \n\nMore info at: https://github.com/prashantgupta24/automatic-mouse-mover", "OK", "")
+				robotgo.Alert("Automatic-mouse-mover app v1.4.0", "Developed by Prashant Gupta. \n\nMore info at: https://github.com/prashantgupta24/automatic-mouse-mover", "OK", "")
 			}
 		}
-
 	}()
 }
 
